@@ -6,15 +6,19 @@ package main
 // go run mrsequential.go wc.so pg*.txt
 //
 
-import "fmt"
-import "6.5840/mr"
-import "plugin"
-import "os"
-import "log"
-import "io/ioutil"
-import "sort"
+import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"plugin"
+	"sort"
+
+	"6.5840/mr"
+)
 
 // for sorting by key.
+// 鸭子类型，实现这三个函数之后就自动满足了 sort.Interface 这个接口
 type ByKey []mr.KeyValue
 
 // for sorting by key.
@@ -47,6 +51,7 @@ func main() {
 		}
 		file.Close()
 		kva := mapf(filename, string(content))
+		// 把每个map任务得到的键值对数组展开之后加入中间表示的数组
 		intermediate = append(intermediate, kva...)
 	}
 
@@ -57,6 +62,11 @@ func main() {
 	//
 
 	sort.Sort(ByKey(intermediate))
+	/*
+		sort.Slice(kva, func(i, j int) bool {
+			return kva[i].Key < kva[j].Key
+		})
+	*/
 
 	oname := "mr-out-0"
 	ofile, _ := os.Create(oname)
@@ -72,6 +82,7 @@ func main() {
 			j++
 		}
 		values := []string{}
+		// 把 key 相同的一段区间的value加入，进行 reduce
 		for k := i; k < j; k++ {
 			values = append(values, intermediate[k].Value)
 		}
@@ -97,6 +108,9 @@ func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(strin
 	if err != nil {
 		log.Fatalf("cannot find Map in %v", filename)
 	}
+	// p.Lookup返回的是plugin.Symbol，本质上只是any，这里通过类型断言转换成了这个函数类型
+	// 框架加载用户代码 / 回调函数
+	// 这里如果签名不匹配，会直接panic，改成 mapf, ok := xmapf.() 即可
 	mapf := xmapf.(func(string, string) []mr.KeyValue)
 	xreducef, err := p.Lookup("Reduce")
 	if err != nil {

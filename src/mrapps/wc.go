@@ -6,16 +6,22 @@ package main
 // go build -buildmode=plugin wc.go
 //
 
-import "6.5840/mr"
-import "unicode"
-import "strings"
-import "strconv"
+import (
+	"strconv"
+	"strings"
+	"unicode"
+
+	"6.5840/mr"
+)
 
 // The map function is called once for each file of input. The first
 // argument is the name of the input file, and the second is the
 // file's complete contents. You should ignore the input file name,
 // and look only at the contents argument. The return value is a slice
 // of key/value pairs.
+// 一个输入文件对应一个 map 函数
+// 输出的中间结果是更加易于表示的键值对形式，比如[{"cat", "1"}, {"dog", "1"}]
+// MR 引擎不需要知道具体的m/r函数计算过程
 func Map(filename string, contents string) []mr.KeyValue {
 	// function to detect word separators.
 	ff := func(r rune) bool { return !unicode.IsLetter(r) }
@@ -36,5 +42,6 @@ func Map(filename string, contents string) []mr.KeyValue {
 // any map task.
 func Reduce(key string, values []string) string {
 	// return the number of occurrences of this word.
+	// 把输入的values数组的长度 int 转成字符串
 	return strconv.Itoa(len(values))
 }

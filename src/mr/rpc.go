@@ -1,23 +1,31 @@
 package mr
 
-//
-// RPC definitions.
-//
-// remember to capitalize all names.
-//
+type TaskType int
 
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
+// worker向coordinator请求任务的不同类型
+// 用const ... iota 模拟 enum
+const (
+	MapTask TaskType = iota
+	ReduceTask
+	WaitTask
+	ExitTask
+)
 
-type ExampleArgs struct {
-	X int
+type AskTaskArgs struct{}
+
+type AskTaskReply struct {
+	Type     TaskType
+	TaskID   int
+	FileName string
+	NMap     int
+	NReduce  int
+	Attempt  int
 }
 
-type ExampleReply struct {
-	Y int
+type ReportTaskArgs struct {
+	Type    TaskType
+	TaskID  int
+	Attempt int
 }
 
-// Add your RPC definitions here.
-
+type ReportTaskReply struct{}
