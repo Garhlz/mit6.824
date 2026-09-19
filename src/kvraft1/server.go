@@ -19,19 +19,18 @@ type TValue struct {
 type KVServer struct {
 	me  int
 	rsm *rsm.RSM
-
-	// Your definitions here.
+	// 键值状态由 RSM 统一复制和驱动。
 	mu    sync.Mutex
 	kvmap map[string]*TValue
 }
 
-// To type-cast req to the right type, take a look at Go's type switches or type
-// assertions below:
+// 可使用 Go 的类型 switch 或类型断言将 req 转换为具体请求类型：
 //
 // https://go.dev/tour/methods/16
 // https://go.dev/tour/methods/15
+// rsm层调用这个DoOp和存储层交互
 func (kv *KVServer) DoOp(req any) any {
-	// Your code here
+	// 根据命令类型分派到对应的状态机操作。
 	if args, ok := req.(rpc.GetArgs); ok {
 		return kv.doGet(args)
 	} else if args, ok := req.(rpc.PutArgs); ok {
@@ -105,7 +104,7 @@ func (kv *KVServer) Snapshot() []byte {
 }
 
 func (kv *KVServer) Restore(data []byte) {
-	// Your code here
+	// 编码完整业务状态，供 Raft 创建快照。
 	if data == nil {
 		return
 	}
@@ -134,10 +133,9 @@ func (kv *KVServer) Restore(data []byte) {
 	}
 }
 
+// Get 由客户端调用，并通过 RSM 提交到 Raft。
 func (kv *KVServer) Get(args *rpc.GetArgs, reply *rpc.GetReply) {
-	// Your code here. Use kv.rsm.Submit() to submit args
-	// You can use go's type casts to turn the any return value
-	// of Submit() into a GetReply: rep.(rpc.GetReply)
+	// 使用 kv.rsm.Submit() 提交请求，并将 any 类型结果断言为 rpc.GetReply。
 	localArgs := rpc.GetArgs{
 		Key: args.Key,
 	}
@@ -159,9 +157,7 @@ func (kv *KVServer) Get(args *rpc.GetArgs, reply *rpc.GetReply) {
 }
 
 func (kv *KVServer) Put(args *rpc.PutArgs, reply *rpc.PutReply) {
-	// Your code here. Use kv.rsm.Submit() to submit args
-	// You can use go's type casts to turn the any return value
-	// of Submit() into a PutReply: rep.(rpc.PutReply)
+	// 使用 kv.rsm.Submit() 提交请求，并将 any 类型结果断言为 rpc.PutReply。
 	localArgs := rpc.PutArgs{
 		Key:     args.Key,
 		Value:   args.Value,
@@ -181,11 +177,9 @@ func (kv *KVServer) Put(args *rpc.PutArgs, reply *rpc.PutReply) {
 	reply.Err = currentReply.Err
 }
 
-// StartKVServer() and MakeRSM() must return quickly, so they should
-// start goroutines for any long-running work.
+// StartKVServer() 和 MakeRSM() 必须快速返回，长期运行的任务应放入 goroutine。
 func StartKVServer(servers []*labrpc.ClientEnd, gid tester.Tgid, me int, persister *tester.Persister, maxraftstate int) []any {
-	// call labgob.Register on structures you want
-	// Go's RPC library to marshall/unmarshall.
+	// 使用 labgob.Register 注册需要通过接口值编码的具体类型。
 	labgob.Register(rsm.Op{})
 	labgob.Register(rpc.PutArgs{})
 	labgob.Register(rpc.GetArgs{})
@@ -197,7 +191,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, gid tester.Tgid, me int, persist
 	}
 
 	kv.rsm = rsm.MakeRSM(servers, me, persister, maxraftstate, kv)
-	// You may need initialization code here.
+	// 在创建 RSM 前完成状态机的初始状态设置。
 	return []any{kv, kv.rsm.Raft()}
 }
 

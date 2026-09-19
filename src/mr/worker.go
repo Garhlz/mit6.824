@@ -12,29 +12,28 @@ import (
 	"time"
 )
 
-// Map functions return a slice of KeyValue.
+// Map 函数返回一组 KeyValue。
 type KeyValue struct {
 	Key   string
 	Value string
 }
 
-// use ihash(key) % NReduce to choose the reduce
-// task number for each KeyValue emitted by Map.
+// 使用 ihash(key) % NReduce，为 Map 产生的每个 KeyValue 选择 Reduce 任务。
 func ihash(key string) int {
 	h := fnv.New32a()
 	h.Write([]byte(key))
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-var coordSockName string // socket for coordinator
+var coordSockName string // Coordinator 的通信 socket
 
-// main/mrworker.go calls this function.
+// main/mrworker.go 调用该函数启动 Worker。
 func Worker(sockname string, mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	coordSockName = sockname
 
-	// Your worker implementation here.
+	// Worker 的主执行逻辑。
 	for {
 		args := AskTaskArgs{}
 		reply := AskTaskReply{}
@@ -66,9 +65,8 @@ func Worker(sockname string, mapf func(string, string) []KeyValue,
 
 }
 
-// send an RPC request to the coordinator, wait for the response.
-// usually returns true.
-// returns false if something goes wrong.
+// 向 Coordinator 发送 RPC 并等待响应。
+// 调用成功时通常返回 true，发生通信错误时返回 false。
 // 都是拉模型，worker向coordinator请求工作
 func call(rpcname string, args interface{}, reply interface{}) bool {
 	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
@@ -98,7 +96,7 @@ func handleMap(reply *AskTaskReply, mapf func(string, string) []KeyValue) error 
 	intermediate := mapf(reply.FileName, string(content))
 
 	result := make([][]KeyValue, reply.NReduce)
-	// result[i] 表示第i个reduce任务
+	// result[i] 保存第 i 个 Reduce 任务的中间结果。
 
 	for _, kv := range intermediate {
 		// 哈希之后取模的分区操作
@@ -113,7 +111,7 @@ func handleMap(reply *AskTaskReply, mapf func(string, string) []KeyValue) error 
 		}
 	}
 
-	// 任务完成之后，请求另一个rpc接口向coordinator进行汇报
+	// 任务完成后，通过另一个 RPC 向 Coordinator 汇报结果。
 	reportTaskArgs := ReportTaskArgs{
 		Type:    reply.Type,
 		TaskID:  reply.TaskID,
@@ -146,7 +144,7 @@ func handleReduce(reply *AskTaskReply, reducef func(string, []string) string) er
 		intermediate = append(intermediate, kva...)
 	}
 
-	// 按照key进行排序
+	// 按 key 排序，使相同 key 的记录连续排列。
 	sort.Slice(intermediate, func(i, j int) bool {
 		return intermediate[i].Key < intermediate[j].Key
 	})
@@ -158,8 +156,8 @@ func handleReduce(reply *AskTaskReply, reducef func(string, []string) string) er
 	tmpName := tmp.Name()
 
 	// 直接复制过来的
-	// call Reduce on each distinct key in intermediate[],
-	// and print the result to mr-out-{reduceID}
+	// 对 intermediate 中的每个不同 key 调用 Reduce，
+	// 并将结果写入 mr-out-{reduceID}。
 	//
 	i := 0
 	for i < len(intermediate) {
@@ -168,7 +166,7 @@ func handleReduce(reply *AskTaskReply, reducef func(string, []string) string) er
 			j++
 		}
 		values := []string{}
-		// 把 key 相同的一段区间的value加入这个数组，进行 reduce
+		// 收集连续区间内相同 key 的 value，再执行 Reduce。
 		for k := i; k < j; k++ {
 			values = append(values, intermediate[k].Value)
 		}

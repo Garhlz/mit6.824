@@ -48,7 +48,7 @@ type Coordinator struct {
 	phase Phase
 }
 
-// start a thread that listens for RPCs from worker.go
+// 启动 RPC 服务，监听 worker.go 发来的请求。
 func (c *Coordinator) server(sockname string) {
 	rpc.Register(c)
 	rpc.HandleHTTP()
@@ -60,8 +60,7 @@ func (c *Coordinator) server(sockname string) {
 	go http.Serve(l, nil)
 }
 
-// main/mrcoordinator.go calls Done() periodically to find out
-// if the entire job has finished.
+// main/mrcoordinator.go 会定期调用 Done()，检查整个作业是否已经完成。
 func (c *Coordinator) Done() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -70,9 +69,8 @@ func (c *Coordinator) Done() bool {
 	return ret
 }
 
-// create a Coordinator.
-// main/mrcoordinator.go calls this function.
-// nReduce is the number of reduce tasks to use.
+// MakeCoordinator 创建协调器，由 main/mrcoordinator.go 调用。
+// nReduce 指定 Reduce 任务的数量。
 func MakeCoordinator(sockname string, files []string, nReduce int) *Coordinator {
 	if nReduce <= 0 {
 		panic("mr: nReduce must be positive")

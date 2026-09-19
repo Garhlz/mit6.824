@@ -9,13 +9,13 @@ import (
 type Clerk struct {
 	clnt    *tester.Clnt
 	servers []string
-	leader  int // last successful leader (index into servers[])
-	// You can add to this struct.
+	leader  int // 最近一次成功响应的 leader 在 servers[] 中的索引
+	// 可在此补充 Clerk 状态。
 }
 
 func MakeClerk(clnt *tester.Clnt, servers []string) kvtest.IKVClerk {
 	ck := &Clerk{clnt: clnt, servers: servers, leader: 0}
-	// You'll have to add code here.
+	// 初始化 Clerk 的 leader 提示信息。
 	return ck
 }
 
@@ -30,19 +30,17 @@ func (ck *Clerk) tryNext(leader int) int {
 	return leader
 }
 
-// Get fetches the current value and version for a key.  It returns
-// ErrNoKey if the key does not exist. It keeps trying forever in the
-// face of all other errors.
+// Get 获取指定 key 的当前值与版本。key 不存在时返回 ErrNoKey；
+// 遇到其他错误时在各 Raft 节点间持续重试。
 //
-// You can send an RPC to server i with code like this:
+// 可以按如下方式向第 i 个服务器发送 RPC：
 // ok := ck.clnt.Call(ck.servers[i], "KVServer.Get", &args, &reply)
 //
-// The types of args and reply (including whether they are pointers)
-// must match the declared types of the RPC handler function's
-// arguments. Additionally, reply must be passed as a pointer.
+// args 与 reply 的类型（包括是否为指针）必须与 RPC handler 的参数声明一致，
+// 且 reply 必须以指针形式传入。
 func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 
-	// You will have to modify this function.
+	// 在此实现寻找 leader 与重试逻辑。
 	var getArgs rpc.GetArgs
 	var getReply rpc.GetReply
 	leader := ck.leader
@@ -51,7 +49,7 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 		getReply = rpc.GetReply{}
 		ok := ck.clnt.Call(ck.servers[leader], "KVServer.Get", &getArgs, &getReply)
 
-		// 通信失败，可能是请求丢失或者回复丢失，直接重试即可
+		// 通信失败，leader错误
 		if !ok {
 			leader = ck.tryNext(leader)
 			continue
@@ -74,25 +72,17 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 	}
 }
 
-// Put updates key with value only if the version in the
-// request matches the version of the key at the server.  If the
-// versions numbers don't match, the server should return
-// ErrVersion.  If Put receives an ErrVersion on its first RPC, Put
-// should return ErrVersion, since the Put was definitely not
-// performed at the server. If the server returns ErrVersion on a
-// resend RPC, then Put must return ErrMaybe to the application, since
-// its earlier RPC might have been processed by the server successfully
-// but the response was lost, and the the Clerk doesn't know if
-// the Put was performed or not.
+// Put 仅在请求版本与服务端当前版本一致时更新 key。
+// 首次 RPC 返回 ErrVersion 表示写入确定未执行；若重发后返回 ErrVersion，
+// 先前请求可能已成功但响应丢失，此时 Clerk 应返回 ErrMaybe。
 //
-// You can send an RPC to server i with code like this:
+// 可以按如下方式向第 i 个服务器发送 RPC：
 // ok := ck.clnt.Call(ck.servers[i], "KVServer.Put", &args, &reply)
 //
-// The types of args and reply (including whether they are pointers)
-// must match the declared types of the RPC handler function's
-// arguments. Additionally, reply must be passed as a pointer.
+// args 与 reply 的类型（包括是否为指针）必须与 RPC handler 的参数声明一致，
+// 且 reply 必须以指针形式传入。
 func (ck *Clerk) Put(key string, value string, version rpc.Tversion) rpc.Err {
-	// You will have to modify this function.
+	// 在此实现带版本语义的 Put 重试逻辑。
 	var putArgs rpc.PutArgs
 	var putReply rpc.PutReply
 	retry := 0

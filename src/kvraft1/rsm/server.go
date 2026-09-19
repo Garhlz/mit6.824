@@ -69,7 +69,7 @@ func (rs *rsmSrv) DoOp(req any) any {
 	case Null:
 		return NullRep{}
 	default:
-		// wrong type! expecting an Inc.
+		// 请求类型错误：此处仅接受 Inc。
 		log.Fatalf("DoOp should execute only Inc and not %T", req)
 	}
 	return nil

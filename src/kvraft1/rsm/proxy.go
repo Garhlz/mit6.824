@@ -8,7 +8,7 @@ import (
 	"6.5840/tester1"
 )
 
-// For RPCs from tester to RSM server
+// 测试程序通过该代理向 RSM 服务端发送 RPC。
 type RSMproxy struct {
 	dc *tester.DaemonClnt
 }

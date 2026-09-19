@@ -217,6 +217,7 @@ func (rf *Raft) PersistBytes() int {
 // Snapshot 表示上层服务已创建一个包含 index 及其之前全部状态的快照。
 // 因此，上层服务不再需要 index 及其之前的日志，Raft 应尽可能裁剪这些日志。
 // 该方法由本地上层状态机调用，不是 RPC；它只裁剪当前节点的日志。
+// raft存储的日志太大时调用
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	rf.mu.Lock()
 	if index <= rf.lastIncludedIndex {
@@ -689,6 +690,8 @@ func (rf *Raft) replicateToPeer(peer int, leaderTerm int) {
 			return
 		}
 
+		// peer的已安装index太小了，比leader的参考index还小
+		// 先给当前peer直接安装上leader的snapshot，使其进度跟上
 		if rf.nextIndex[peer] <= rf.lastIncludedIndex {
 			args := InstallSnapshotArgs{
 				Term:              rf.currentTerm,
@@ -727,17 +730,18 @@ func (rf *Raft) replicateToPeer(peer int, leaderTerm int) {
 			continue
 		}
 		// nextIndex/matchIndex 和 RPC 使用绝对索引；访问 slice 时转换为局部下标。
-		nextIndex := rf.nextIndex[peer] - rf.lastIncludedIndex
-		prevIndex := nextIndex - 1
+		nextIndex := rf.nextIndex[peer] - rf.lastIncludedIndex // 相对
+		prevIndex := nextIndex - 1                             // 相对
 		args := AppendEntriesArgs{
 			Term:         rf.currentTerm,
 			LeaderID:     rf.me,
 			PrevLogIndex: prevIndex + rf.lastIncludedIndex,
 			PrevLogTerm:  rf.logEntries[prevIndex].Term,
-			Entries:      append([]LogEntry{}, rf.logEntries[nextIndex:]...), // 构造 RPC 快照时应复制
+			Entries:      append([]LogEntry{}, rf.logEntries[nextIndex:]...), // 构造 RPC 快照时需要复制slice数据
 			LeaderCommit: rf.commitIndex,
 		}
 		reply := AppendEntriesReply{}
+		// 发送的日志如果成功安装之后，peer和leader的匹配index
 		matched := prevIndex + len(args.Entries) + rf.lastIncludedIndex
 		requestNextIndex := rf.nextIndex[peer]
 		rf.mu.Unlock()
@@ -763,7 +767,8 @@ func (rf *Raft) replicateToPeer(peer int, leaderTerm int) {
 		}
 
 		if reply.Success {
-			// 成功响应只推进复制进度，避免延迟响应使索引倒退。
+			// 成功响应只推进复制进度，避免延迟响应使索引倒退
+			// 避免了过时响应进度倒退
 			rf.matchIndex[peer] = max(rf.matchIndex[peer], matched)
 			rf.nextIndex[peer] = max(rf.nextIndex[peer], matched+1)
 
@@ -856,6 +861,7 @@ func (rf *Raft) checkCommitIndex() (bool, int) {
 			if serverID == rf.me {
 				continue
 			}
+			// 比较：多数节点的matchIndex相比当前leader commitIndex是否有所推进
 			if rf.matchIndex[serverID] >= N {
 				cnt++
 			}

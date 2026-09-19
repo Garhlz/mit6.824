@@ -11,22 +11,18 @@ import (
 )
 
 type Lock struct {
-	// IKVClerk is a go interface for k/v clerks: the interface hides
-	// the specific Clerk type of ck but promises that ck supports
-	// Put and Get.  The tester passes the clerk in when calling
-	// MakeLock().
+	// IKVClerk 是键值服务 Clerk 的 Go 接口：它隐藏具体实现类型，
+	// 但保证提供 Put 和 Get。测试程序调用 MakeLock() 时会传入该 Clerk。
 	ck        kvtest.IKVClerk
 	lockKey   string
 	lockValue string
-	// You may add code here
+	// 可在此补充分布式锁所需的客户端状态。
 }
 
-// The tester calls MakeLock() and passes in a k/v clerk; your code can
-// perform a Put or Get by calling lk.ck.Put() or lk.ck.Get().
+// 测试程序调用 MakeLock() 并传入键值服务 Clerk；锁可通过
+// lk.ck.Put() 和 lk.ck.Get() 访问共享状态。
 //
-// This interface supports multiple locks by means of the
-// lockname argument; locks with different names should be
-// independent.
+// lockname 用于区分多把锁；名称不同的锁应彼此独立。
 func MakeLock(ck kvtest.IKVClerk, lockname string) *Lock {
 	lockValue := "lock-" + randID()
 	lk := &Lock{
@@ -34,7 +30,7 @@ func MakeLock(ck kvtest.IKVClerk, lockname string) *Lock {
 		lockKey:   lockname,
 		lockValue: lockValue}
 
-	// You may add code here
+	// 可在此完成锁状态的初始化。
 	err := ck.Put(lockname, "", 0)
 	/*
 		OK          自己创建了锁 key
@@ -48,7 +44,7 @@ func MakeLock(ck kvtest.IKVClerk, lockname string) *Lock {
 }
 
 func (lk *Lock) Acquire() {
-	// Your code here
+	// 循环读取并尝试占有锁，直到确认获取成功。
 	for {
 		value, version, err := lk.ck.Get(lk.lockKey)
 		if err != rpc.OK {
@@ -87,7 +83,7 @@ func (lk *Lock) Acquire() {
 }
 
 func (lk *Lock) Release() {
-	// Your code here
+	// 仅允许锁的当前持有者释放锁。
 	for {
 		value, version, err := lk.ck.Get(lk.lockKey)
 		if err != rpc.OK {

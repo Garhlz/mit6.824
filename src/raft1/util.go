@@ -2,7 +2,7 @@ package raft
 
 import "log"
 
-// Debugging
+// 调试输出开关与辅助函数。
 const Debug = false
 
 func DPrintf(format string, a ...interface{}) {

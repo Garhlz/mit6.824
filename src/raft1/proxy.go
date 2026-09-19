@@ -7,7 +7,7 @@ import (
 	"6.5840/tester1"
 )
 
-// For Raft RPCs from tester to Raft server
+// 测试程序通过该代理向 Raft 服务端发送 RPC。
 type Rfproxy struct {
 	dc *tester.DaemonClnt
 }
@@ -38,7 +38,7 @@ func (rfp *Rfproxy) Start(command interface{}) (int, int, bool) {
 	return rep.Index, rep.Term, rep.Leader
 }
 
-// For RPCs from server to tester
+// Raft 服务端通过该代理向测试程序发送 RPC。
 type TesterProxy struct {
 	*tester.TesterClnt
 }

@@ -2,8 +2,8 @@ package mr
 
 type TaskType int
 
-// worker向coordinator请求任务的不同类型
-// 用const ... iota 模拟 enum
+// Worker 向 Coordinator 请求的任务类型。
+// 使用 const 与 iota 模拟枚举。
 const (
 	MapTask TaskType = iota
 	ReduceTask

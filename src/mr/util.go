@@ -31,8 +31,7 @@ func startWorker(app string, i int, c chan int, sock string) {
 	}(worker, i)
 }
 
-// Run MapReduce: start a coordinator and several workers,
-// and wait for the coordinator being done
+// 运行 MapReduce：启动一个 Coordinator 和若干 Worker，并等待作业完成。
 func runMRchan(files []string, app string, n int, c chan int, sock string) {
 	coord := exec.Command("../main/mrcoordinator", append([]string{sock}, files...)...)
 	coord.Stderr = os.Stderr
@@ -41,7 +40,7 @@ func runMRchan(files []string, app string, n int, c chan int, sock string) {
 		log.Fatalf("mr failed %v", err)
 	}
 
-	// give the coordinator time to create the sockets.
+	// 留出时间让 Coordinator 创建通信 socket。
 	time.Sleep(1 * time.Second)
 
 	for i := 0; i < n; i++ {
@@ -68,8 +67,7 @@ func RandString(n int) string {
 	return s[0:n]
 }
 
-// Cook up a unique-ish UNIX-domain socket name
-// in /var/tmp, for the coordinator.
+// 在 /var/tmp 中为 Coordinator 生成一个尽量唯一的 UNIX 域 socket 名称。
 func coordinatorSock() string {
 	const N = 20
 	s := "/tmp/5840-mr-"
@@ -77,7 +75,7 @@ func coordinatorSock() string {
 	return s
 }
 
-// Generate correct output for a test
+// 为测试生成标准输出。
 func mkCorrectOutput(files []string, app, out string) {
 	args := append([]string{app}, files...)
 	cmd := exec.Command("../../main/mrsequential", args...)

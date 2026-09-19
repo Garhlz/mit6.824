@@ -27,7 +27,7 @@ type KVServer struct {
 	mu sync.Mutex
 
 	kvmap map[string]*TValue
-	// Your definitions here.
+	// 键值服务的内存状态。
 
 }
 
@@ -36,15 +36,14 @@ func MakeKVServer() *KVServer {
 		mu:    sync.Mutex{},
 		kvmap: make(map[string]*TValue),
 	}
-	// Your code here.
+	// 初始化服务端状态。
 
 	return kv
 }
 
-// Get returns the value and version for args.Key, if args.Key
-// exists. Otherwise, Get returns ErrNoKey.
+// Get 返回 args.Key 对应的值与版本；key 不存在时返回 ErrNoKey。
 func (kv *KVServer) Get(args *rpc.GetArgs, reply *rpc.GetReply) {
-	// Your code here.
+	// 在锁内读取键值状态。
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	value, ok := kv.kvmap[args.Key]
@@ -57,12 +56,10 @@ func (kv *KVServer) Get(args *rpc.GetArgs, reply *rpc.GetReply) {
 	reply.Err = rpc.OK
 }
 
-// Update the value for a key if args.Version matches the version of
-// the key on the server. If versions don't match, return ErrVersion.
-// If the key doesn't exist, Put installs the value if the
-// args.Version is 0, and returns ErrNoKey otherwise.
+// Put 仅在 args.Version 与服务端版本一致时更新 key；版本不匹配时返回
+// ErrVersion。若 key 不存在，仅当 args.Version 为 0 时创建，否则返回 ErrNoKey。
 func (kv *KVServer) Put(args *rpc.PutArgs, reply *rpc.PutReply) {
-	// Your code here.
+	// 在锁内执行带版本条件的写入。
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	value, ok := kv.kvmap[args.Key]
@@ -97,7 +94,7 @@ func (kv *KVServer) Put(args *rpc.PutArgs, reply *rpc.PutReply) {
 	reply.Err = rpc.OK
 }
 
-// You can ignore all arguments; they are for replicated KVservers
+// 这些参数供复制式 KV 服务使用，本实验的单节点服务可以忽略。
 func StartKVServer(tc *tester.TesterClnt, ends []*labrpc.ClientEnd, gid tester.Tgid, srv int, persister *tester.Persister) []any {
 	kv := MakeKVServer()
 	return []any{kv}

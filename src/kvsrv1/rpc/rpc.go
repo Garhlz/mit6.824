@@ -3,15 +3,15 @@ package rpc
 type Err string
 
 const (
-	// Err's returned by server and Clerk
+	// 服务端与 Clerk 均可能返回的错误。
 	OK         = "OK"
 	ErrNoKey   = "ErrNoKey"
 	ErrVersion = "ErrVersion"
 
-	// Err returned by Clerk only
+	// 仅由 Clerk 返回，表示写入结果无法确定。
 	ErrMaybe = "ErrMaybe"
 
-	// For future kvraft lab
+	// 后续 kvraft 实验使用的错误。
 	ErrWrongLeader = "ErrWrongLeader"
 	ErrWrongGroup  = "ErrWrongGroup"
 )

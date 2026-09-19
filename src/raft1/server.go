@@ -17,8 +17,7 @@ const (
 	SnapShotInterval = 10
 )
 
-// The interface from a server (each one runs inside its own process)
-// to the tester (which runs inside a separate process).
+// 服务端与测试程序之间的接口；二者分别运行在独立进程中。
 type Itester interface {
 	CheckLogs(int, raftapi.ApplyMsg) (string, bool)
 	IngestLog(int, map[int]any)
@@ -33,24 +32,21 @@ type rfsrv struct {
 
 	mu   sync.Mutex
 	raft raftapi.Raft
-	log  map[int]any // for snapshots
+	log  map[int]any // 用于校验快照恢复后的日志
 }
 
 func NewRfsrv(tc *tester.TesterClnt, ends []*labrpc.ClientEnd, grp tester.Tgid, srv int, persister *tester.Persister) []any {
-	// tc is a client to talk to the tester
+	// tc 是用于连接测试程序的客户端。
 	ts := newTesterProxy(tc)
 	s := newRfsrv(ts, ends, grp, srv, persister, tester.MaxRaftState > 0)
 	return []any{s.raft, s}
 }
 
-// Each Raft server uses a raft library to Start a command and read
-// committed commands from the library's apply channel.  The server
-// can be run in two configurations: without and without snapshots.
+// 每个 Raft 服务端通过 Raft 库的 Start 提交命令，并从 applyCh 读取已提交结果。
+// 测试可分别在启用或不启用快照的模式下运行服务端。
 func newRfsrv(ts Itester, ends []*labrpc.ClientEnd, grp tester.Tgid, srv int, persister *tester.Persister, snapshot bool) *rfsrv {
 
-	// grab a copy of the initial snapshot, to avoid
-	// a possible race with raft.Make() and the
-	// threads it starts, which might call persist().
+	// 在调用 raft.Make() 前复制初始快照，避免与其启动的持久化线程发生竞争。
 	sn := persister.ReadSnapshot()
 
 	s := &rfsrv{
@@ -65,8 +61,7 @@ func newRfsrv(ts Itester, ends []*labrpc.ClientEnd, grp tester.Tgid, srv int, pe
 	}
 	if snapshot {
 		if sn != nil && len(sn) > 0 {
-			// mimic KV server and process snapshot now.
-			// ideally Raft should send it up on applyCh...
+			// 模拟 KV 服务立即处理快照；理想情况下应由 Raft 通过 applyCh 交付。
 			err := s.ingestSnap(sn, -1)
 			if err != "" {
 				ts.ApplyErr(srv, err)
@@ -101,13 +96,12 @@ func (rs *rfsrv) getraft() raftapi.Raft {
 	return rs.raft
 }
 
-// The Raft server sends each command into an ChecLogs RPC to the
-// tester so that the tester knows what the server has received and
-// can check against what it expected.
+// Raft 服务端通过 CheckLogs RPC 将每条命令发送给测试程序，
+// 以便测试程序核对实际收到的日志与预期是否一致。
 func (rs *rfsrv) applier(applyCh chan raftapi.ApplyMsg) {
 	for m := range applyCh {
 		if m.CommandValid == false {
-			// ignore other types of ApplyMsg
+			// 忽略其他类型的 ApplyMsg。
 		} else {
 			err_msg, prevok := rs.ts.CheckLogs(rs.me, m)
 			if m.CommandIndex > 1 && prevok == false {
@@ -115,16 +109,14 @@ func (rs *rfsrv) applier(applyCh chan raftapi.ApplyMsg) {
 			}
 			if err_msg != "" {
 				rs.ts.ApplyErr(rs.me, err_msg)
-				// keep reading after error so that Raft doesn't block
-				// holding locks...
+				// 即使发生错误也继续读取，避免 Raft 持锁阻塞。
 			}
 		}
 	}
 }
 
-// Periodically snapshot raft state. When receiving an snapshot on the
-// apply channel communicate in a IngestLog RPC the snapshot to
-// tester.
+// 定期为 Raft 状态创建快照；从 applyCh 收到快照后，
+// 通过 IngestLog RPC 将其交给测试程序。
 func (rs *rfsrv) applierSnap(applyCh chan raftapi.ApplyMsg) {
 	if rs.raft == nil {
 		return // ???
@@ -148,7 +140,7 @@ func (rs *rfsrv) applierSnap(applyCh chan raftapi.ApplyMsg) {
 				}
 			}
 
-			rs.log[m.CommandIndex] = m.Command // for shapshots
+			rs.log[m.CommandIndex] = m.Command // 保存日志以生成快照
 			rs.lastApplied = m.CommandIndex
 
 			if (m.CommandIndex+1)%SnapShotInterval == 0 {
@@ -171,17 +163,16 @@ func (rs *rfsrv) applierSnap(applyCh chan raftapi.ApplyMsg) {
 				tester.PostAnnotatorInfoInterval(start, desp, details)
 			}
 		} else {
-			// Ignore other types of ApplyMsg.
+			// 忽略其他类型的 ApplyMsg。
 		}
 		if err_msg != "" {
 			rs.ts.ApplyErr(rs.me, err_msg)
-			// keep reading after error so that Raft doesn't block
-			// holding locks...
+			// 即使发生错误也继续读取，避免 Raft 持锁阻塞。
 		}
 	}
 }
 
-// returns "" or error string
+// 成功时返回空字符串，失败时返回错误描述。
 func (rs *rfsrv) ingestSnap(snapshot []byte, index int) string {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()

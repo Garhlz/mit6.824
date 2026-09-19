@@ -15,22 +15,20 @@ type Clerk struct {
 
 func MakeClerk(clnt *tester.Clnt, server string) kvtest.IKVClerk {
 	ck := &Clerk{clnt: clnt, server: server}
-	// You may add code here.
+	// 可在此补充客户端状态。
 	return ck
 }
 
-// Get fetches the current value and version for a key.  It returns
-// ErrNoKey if the key does not exist. It keeps trying forever in the
-// face of all other errors.
+// Get 获取指定 key 的当前值与版本。key 不存在时返回 ErrNoKey；
+// 遇到其他错误时持续重试。
 //
-// You can send an RPC with code like this:
+// 可以按如下方式发送 RPC：
 // ok := ck.clnt.Call(ck.server, "KVServer.Get", &args, &reply)
 //
-// The types of args and reply (including whether they are pointers)
-// must match the declared types of the RPC handler function's
-// arguments. Additionally, reply must be passed as a pointer.
+// args 与 reply 的类型（包括是否为指针）必须与 RPC handler 的参数声明一致，
+// 且 reply 必须以指针形式传入。
 func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
-	// You will have to modify this function.
+	// 在此实现客户端的 Get 重试逻辑。
 	var getArgs rpc.GetArgs
 	var getReply rpc.GetReply
 
@@ -53,25 +51,18 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 	return "", 0, getReply.Err
 }
 
-// Put updates key with value only if the version in the
-// request matches the version of the key at the server.  If the
-// versions numbers don't match, the server should return
-// ErrVersion.  If Put receives an ErrVersion on its first RPC, Put
-// should return ErrVersion, since the Put was definitely not
-// performed at the server. If the server returns ErrVersion on a
-// resend RPC, then Put must return ErrMaybe to the application, since
-// its earlier RPC might have been processed by the server successfully
-// but the response was lost, and the Clerk doesn't know if
-// the Put was performed or not.
+// Put 仅在请求版本与服务端当前版本一致时更新 key。
+// 版本不一致时，服务端返回 ErrVersion。若首次 RPC 就收到 ErrVersion，
+// 可确定写入未执行；若重发后收到 ErrVersion，则先前请求可能已经成功但响应丢失，
+// Clerk 无法确定写入结果，应向调用方返回 ErrMaybe。
 //
-// You can send an RPC with code like this:
+// 可以按如下方式发送 RPC：
 // ok := ck.clnt.Call(ck.server, "KVServer.Put", &args, &reply)
 //
-// The types of args and reply (including whether they are pointers)
-// must match the declared types of the RPC handler function's
-// arguments. Additionally, reply must be passed as a pointer.
+// args 与 reply 的类型（包括是否为指针）必须与 RPC handler 的参数声明一致，
+// 且 reply 必须以指针形式传入。
 func (ck *Clerk) Put(key, value string, version rpc.Tversion) rpc.Err {
-	// You will have to modify this function.
+	// 在此实现带版本检查的 Put 重试逻辑。
 	var putArgs rpc.PutArgs
 	var putReply rpc.PutReply
 	retry := 0
