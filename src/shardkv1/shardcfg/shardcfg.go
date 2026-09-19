@@ -4,18 +4,19 @@ import (
 	"encoding/json"
 	"hash/fnv"
 	"log"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"testing"
 
-	"6.5840/tester1"
+	tester "6.5840/tester1"
 )
 
 type Tshid int
 type Tnum int
 
 const (
-	NShards  = 12 // The number of shards.
+	NShards  = 12 // shard 总数
 	NumFirst = Tnum(1)
 )
 
@@ -23,9 +24,7 @@ const (
 	Gid1 = tester.Tgid(1)
 )
 
-// which shard is a key in?
-// please use this function,
-// and please do not change it.
+// Key2Shard 计算 key 所属的 shard。请直接使用该函数，不要修改映射规则。
 func Key2Shard(key string) Tshid {
 	h := fnv.New32a()
 	h.Write([]byte(key))
@@ -33,12 +32,11 @@ func Key2Shard(key string) Tshid {
 	return shard
 }
 
-// A configuration -- an assignment of shards to groups.
-// Please don't change this.
+// ShardConfig 描述 shard 到 group 的分配关系，请勿修改其字段定义。
 type ShardConfig struct {
-	Num    Tnum                     // config number
-	Shards [NShards]tester.Tgid     // shard -> gid
-	Groups map[tester.Tgid][]string // gid -> servers[]
+	Num    Tnum                     // 配置编号
+	Shards [NShards]tester.Tgid     // shard → gid：每个分片由哪个组负责
+	Groups map[tester.Tgid][]string // gid → servers[]：每个组包含的服务器
 }
 
 func MakeShardConfig() *ShardConfig {
@@ -46,6 +44,10 @@ func MakeShardConfig() *ShardConfig {
 		Groups: make(map[tester.Tgid][]string),
 	}
 	return c
+}
+
+func (cfg *ShardConfig) EqualTo(other *ShardConfig) bool {
+	return reflect.DeepEqual(*cfg, *other)
 }
 
 func (cfg *ShardConfig) String() string {
@@ -76,7 +78,7 @@ func (cfg *ShardConfig) Copy() *ShardConfig {
 	return c
 }
 
-// mostgroup, mostn, leastgroup, leastn
+// 返回 shard 最多/最少的组及其数量。
 func analyze(c *ShardConfig) (tester.Tgid, int, tester.Tgid, int) {
 	counts := map[tester.Tgid]int{}
 	for _, g := range c.Shards {
@@ -87,8 +89,7 @@ func analyze(c *ShardConfig) (tester.Tgid, int, tester.Tgid, int) {
 	var mg tester.Tgid = -1
 	ln := 257
 	var lg tester.Tgid = -1
-	// Enforce deterministic ordering, map iteration
-	// is randomized in go
+	// Go 的 map 遍历顺序不固定，因此先排序以保证结果确定。
 	groups := make([]tester.Tgid, len(c.Groups))
 	i := 0
 	for k := range c.Groups {
@@ -110,17 +111,15 @@ func analyze(c *ShardConfig) (tester.Tgid, int, tester.Tgid, int) {
 	return mg, mn, lg, ln
 }
 
-// return GID of group with least number of
-// assigned shards.
+// 返回当前分配 shard 最少的组 GID。
 func least(c *ShardConfig) tester.Tgid {
 	_, _, lg, _ := analyze(c)
 	return lg
 }
 
-// balance assignment of shards to groups.
-// modifies c.
+// Rebalance 原地调整配置，使各组负责的 shard 数量尽量均衡。
 func (c *ShardConfig) Rebalance() {
-	// if no groups, un-assign all shards
+	// 没有任何组时，取消所有 shard 的分配。
 	if len(c.Groups) < 1 {
 		for s, _ := range c.Shards {
 			c.Shards[s] = 0
@@ -128,7 +127,7 @@ func (c *ShardConfig) Rebalance() {
 		return
 	}
 
-	// assign all unassigned shards
+	// 将尚未分配或原组已离开的 shard 分配给现有组。
 	for s, g := range c.Shards {
 		_, ok := c.Groups[g]
 		if ok == false {
@@ -137,13 +136,13 @@ func (c *ShardConfig) Rebalance() {
 		}
 	}
 
-	// move shards from most to least heavily loaded
+	// 逐个把 shard 从负载最高的组移动到负载最低的组。
 	for {
 		mg, mn, lg, ln := analyze(c)
 		if mn < ln+2 {
 			break
 		}
-		// move 1 shard from mg to lg
+		// 每轮从 mg 向 lg 移动一个 shard。
 		for s, g := range c.Shards {
 			if g == mg {
 				c.Shards[s] = lg
@@ -170,8 +169,7 @@ func (cfg *ShardConfig) Join(servers map[tester.Tgid][]string) bool {
 				}
 			}
 		}
-		// new GID
-		// modify cfg to reflect the Join()
+		// 将新 GID 加入配置。
 		cfg.Groups[gid] = servers
 		changed = true
 	}
@@ -187,11 +185,11 @@ func (cfg *ShardConfig) Leave(gids []tester.Tgid) bool {
 	for _, gid := range gids {
 		_, ok := cfg.Groups[gid]
 		if ok == false {
-			// already no GID!
+			// 该 GID 已不在配置中。
 			log.Printf("Leave(%v) but not in config", gid)
 			return false
 		} else {
-			// modify op.Config to reflect the Leave()
+			// 从配置中移除离开的 GID。
 			delete(cfg.Groups, gid)
 			changed = true
 		}
@@ -240,7 +238,7 @@ func (cfg *ShardConfig) CheckConfig(t *testing.T, groups []tester.Tgid) {
 		fatalf(t, "wanted %v groups, got %v", len(groups), len(cfg.Groups))
 	}
 
-	// are the groups as expected?
+	// 检查组集合是否符合预期。
 	for _, g := range groups {
 		_, ok := cfg.Groups[g]
 		if ok != true {
@@ -248,7 +246,7 @@ func (cfg *ShardConfig) CheckConfig(t *testing.T, groups []tester.Tgid) {
 		}
 	}
 
-	// any un-allocated shards?
+	// 检查是否存在未分配的 shard。
 	if len(groups) > 0 {
 		for s, g := range cfg.Shards {
 			_, ok := cfg.Groups[g]
@@ -258,7 +256,7 @@ func (cfg *ShardConfig) CheckConfig(t *testing.T, groups []tester.Tgid) {
 		}
 	}
 
-	// more or less balanced sharding?
+	// 检查 shard 分配是否基本均衡。
 	counts := map[tester.Tgid]int{}
 	for _, g := range cfg.Shards {
 		counts[g] += 1

@@ -23,7 +23,7 @@ func (ck *Clerk) Leader() int {
 	return ck.leader
 }
 
-func (ck *Clerk) tryNext(leader int) int {
+func (ck *Clerk) nextLeader(leader int) int {
 	length := len(ck.servers)
 	leader++
 	leader %= length
@@ -51,13 +51,13 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 
 		// 通信失败，leader错误
 		if !ok {
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			continue
 		}
 
 		switch getReply.Err {
 		case rpc.ErrWrongLeader:
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			continue
 		case rpc.OK:
 			ck.leader = leader
@@ -66,7 +66,7 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 			ck.leader = leader
 			return "", 0, getReply.Err
 		default:
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			continue
 		}
 	}
@@ -96,13 +96,13 @@ func (ck *Clerk) Put(key string, value string, version rpc.Tversion) rpc.Err {
 		putReply = rpc.PutReply{}
 		ok := ck.clnt.Call(ck.servers[leader], "KVServer.Put", &putArgs, &putReply)
 		if !ok {
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			retry++
 			continue
 		}
 		switch putReply.Err {
 		case rpc.ErrWrongLeader:
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			retry++
 			continue
 		case rpc.ErrVersion:
@@ -118,7 +118,7 @@ func (ck *Clerk) Put(key string, value string, version rpc.Tversion) rpc.Err {
 			ck.leader = leader
 			return rpc.ErrNoKey
 		default:
-			leader = ck.tryNext(leader)
+			leader = ck.nextLeader(leader)
 			continue
 		}
 

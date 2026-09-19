@@ -11,17 +11,12 @@ import (
 	tester "6.5840/tester1"
 )
 
-type TValue struct {
-	Value   string
-	Version rpc.Tversion
-}
-
 type KVServer struct {
 	me  int
 	rsm *rsm.RSM
 	// 键值状态由 RSM 统一复制和驱动。
 	mu    sync.Mutex
-	kvmap map[string]*TValue
+	kvmap map[string]*rpc.TValue
 }
 
 // 可使用 Go 的类型 switch 或类型断言将 req 转换为具体请求类型：
@@ -68,7 +63,7 @@ func (kv *KVServer) doPut(args rpc.PutArgs) rpc.PutReply {
 		}
 
 		// 版本号 = 0
-		kv.kvmap[args.Key] = &TValue{
+		kv.kvmap[args.Key] = &rpc.TValue{
 			Value:   args.Value,
 			Version: 1,
 		}
@@ -82,7 +77,7 @@ func (kv *KVServer) doPut(args rpc.PutArgs) rpc.PutReply {
 	}
 
 	// key存在且版本号正确的路径
-	kv.kvmap[args.Key] = &TValue{
+	kv.kvmap[args.Key] = &rpc.TValue{
 		Value:   args.Value,
 		Version: args.Version + 1,
 	}
@@ -113,12 +108,12 @@ func (kv *KVServer) Restore(data []byte) {
 	}
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
-	var kvmap map[string]*TValue
+	var kvmap map[string]*rpc.TValue
 	if d.Decode(&kvmap) != nil {
 		panic("restore snapshot error")
 	} else {
 		kv.mu.Lock()
-		kv.kvmap = make(map[string]*TValue, len(kvmap))
+		kv.kvmap = make(map[string]*rpc.TValue, len(kvmap))
 
 		for k, v := range kvmap {
 			if v == nil {
@@ -187,7 +182,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, gid tester.Tgid, me int, persist
 	kv := &KVServer{
 		me:    me,
 		mu:    sync.Mutex{},
-		kvmap: make(map[string]*TValue),
+		kvmap: make(map[string]*rpc.TValue),
 	}
 
 	kv.rsm = rsm.MakeRSM(servers, me, persister, maxraftstate, kv)

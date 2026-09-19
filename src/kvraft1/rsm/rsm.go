@@ -45,7 +45,7 @@ type RSM struct {
 
 type ReaderReply struct {
 	Op
-	OpReply      any
+	ServerReply  any
 	CommandIndex int
 }
 
@@ -116,7 +116,8 @@ func (rsm *RSM) Submit(req any) (rpc.Err, any) {
 	// leader是否改变，收到reply再判断
 	ch := make(chan ReaderReply, 1)
 	rsm.dist[index] = ch
-
+	// 在结束之前释放map的内存资源
+	defer rsm.deleteCh(index, ch)
 	rsm.mu.Unlock()
 
 	var reply ReaderReply
@@ -135,7 +136,6 @@ func (rsm *RSM) Submit(req any) (rpc.Err, any) {
 			// 状态已经改变
 			// 但是命令有可能已经提交
 			if currentTerm != term || !isLeader {
-				rsm.deleteCh(index, ch)
 				return rpc.ErrWrongLeader, nil
 			}
 		}
@@ -146,13 +146,10 @@ func (rsm *RSM) Submit(req any) (rpc.Err, any) {
 
 	// 判断当前响应是否与请求匹配，只需比较唯一id即可
 	if reply.RandID != op.RandID {
-		rsm.deleteCh(index, ch)
 		return rpc.ErrWrongLeader, nil
 	}
 
-	rsm.deleteCh(index, ch)
-
-	return rpc.OK, reply.OpReply
+	return rpc.OK, reply.ServerReply
 }
 
 // reader 线程，监听raft层是否提交新的applyMsg
@@ -160,8 +157,9 @@ func (rsm *RSM) reader() {
 	for applyMsg := range rsm.applyCh {
 		if applyMsg.CommandValid {
 			op := applyMsg.Command.(Op)
-			// DoOp的时候才真正把command应用到kv服务
-			opReply := rsm.sm.DoOp(op.Command)
+
+			// DoOp 到这里才请求kv存储服务，执行raft共识提交的指令
+			serverReply := rsm.sm.DoOp(op.Command)
 
 			if rsm.maxraftstate != -1 {
 				// PersistBytes() 即raft的persister中保存的raft state的长度
@@ -182,7 +180,7 @@ func (rsm *RSM) reader() {
 
 			reply := ReaderReply{
 				Op:           op,
-				OpReply:      opReply,
+				ServerReply:  serverReply,
 				CommandIndex: applyMsg.CommandIndex,
 			}
 

@@ -5,6 +5,8 @@ import (
 	"6.5840/shardkv1/shardcfg"
 )
 
+type ShardResult int
+
 type FreezeShardArgs struct {
 	Shard shardcfg.Tshid
 	Num   shardcfg.Tnum

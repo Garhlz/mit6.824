@@ -38,3 +38,7 @@ type GetReply struct {
 	Err     Err
 }
 
+type TValue struct {
+	Value   string
+	Version Tversion
+}
